@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>밴드 조종기</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <header>
+        <h2>밴드 운영 조종기</h2>
+    </header>
+
+    <nav class="tab-nav">
+        <button class="tab-button active" data-tab="point">포인트</button>
+        <button class="tab-button" data-tab="transfer-point">포인트 양도</button>
+        <button class="tab-button" data-tab="transfer-item">아이템 양도</button>
+        <button class="tab-button" data-tab="gamble">도박</button>
+        <button class="tab-button" data-tab="item">아이템 지급</button>
+        <button class="tab-button" data-tab="info">정보조회</button>
+    </nav>
+
+    <main class="content-wrapper">
+
+        <div id="point-tab" class="tab-content active">
+            <form id="point-form" class="tab-form">
+                <div class="form-group">
+                    <label for="member-id-point">회원 선택</label>
+                    <select id="member-id-point" name="member_id" required>
+                        <option value="">불러오는 중...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="points-amount">포인트 (예: 100, -50)</label>
+                    <input type="number" id="points-amount" name="points" required>
+                </div>
+                <div class="form-group">
+                    <label for="points-reason">사유</label>
+                    <input type="text" id="points-reason" name="reason" required>
+                </div>
+                <button type="submit">포인트 지급/회수</button>
+            </form>
+        </div>
+
+        <div id="transfer-point-tab" class="tab-content">
+            <form id="transfer-point-form" class="tab-form">
+                <div class="form-group">
+                    <label for="member-id-sender">보내는 분</label>
+                    <select id="member-id-sender" name="sender_id" required>
+                        <option value="">불러오는 중...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="member-id-receiver">받는 분</label>
+                    <select id="member-id-receiver" name="receiver_id" required>
+                        <option value="">불러오는 중...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="transfer-amount">양도할 금액</label>
+                    <input type="number" id="transfer-amount" name="amount" min="1" required>
+                </div>
+                <button type="submit">포인트 양도</button>
+            </form>
+        </div>
+
+        <div id="transfer-item-tab" class="tab-content">
+            <form id="transfer-item-form" class="tab-form">
+                <div class="form-group">
+                    <label for="sender-id-item-transfer">보내는 분</label>
+                    <select id="sender-id-item-transfer" name="sender_id" required>
+                        <option value="">불러오는 중...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="receiver-id-item-transfer">받는 분</label>
+                    <select id="receiver-id-item-transfer" name="receiver_id" required>
+                        <option value="">불러오는 중...</option>
+                    </select>
+                </div>
+                <hr>
+                <div class="form-group">
+                    <label for="item-id-transfer">보유 아이템 선택</label>
+                    <select id="item-id-transfer" name="item_id" required disabled>
+                        <option value="">먼저 '보내는 분'을 선택하세요</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="quantity-transfer">수량</label>
+                    <input type="number" id="quantity-transfer" name="quantity" value="1" min="1" required disabled>
+                </div>
+                <button type="submit" id="transfer-item-submit" disabled>아이템 양도 실행</button>
+            </form>
+        </div>
+
+        <div id="gamble-tab" class="tab-content">
+            <form id="gamble-form" class="tab-form">
+                <div class="form-group">
+                    <label for="member-id-gamble">회원 선택</label>
+                    <select id="member-id-gamble" name="member_id" required>
+                        <option value="">불러오는 중...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="game-id-select">도박 종류</label>
+                    <select id="game-id-select" name="game_id" required>
+                        <option value="">불러오는 중...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="bet-amount">베팅 금액</label>
+                    <input type="number" id="bet-amount" name="bet_amount" min="1" required>
+                </div>
+                <button type="submit">도박 실행</button>
+            </form>
+        </div>
+
+        <div id="item-tab" class="tab-content">
+            <form id="item-form" class="tab-form">
+                <div class="form-group">
+                    <label for="member-id-item">회원 선택</label>
+                    <select id="member-id-item" name="member_id" required>
+                        <option value="">불러오는 중...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="item-id-select">아이템 선택</label>
+                    <select id="item-id-select" name="item_id" required>
+                        <option value="">불러오는 중...</option>
+                    </select>
+                </div>
+                <div class="form-group-inline">
+                    <input type="checkbox" id="item-is-purchase" name="is_purchase">
+                    <label for="item-is-purchase">포인트 차감 (구매로 처리)</label>
+                </div>
+                <div class="form-group">
+                    <label for="item-quantity">수량</label>
+                    <input type="number" id="item-quantity" name="quantity" value="1" min="1" required>
+                </div>
+                <button type="submit">아이템 실행</button>
+            </form>
+        </div>
+        
+        <div id="info-tab" class="tab-content">
+            <form id="info-form" class="tab-form">
+                <div class="form-group">
+                    <label for="member-id-info">회원 선택</label>
+                    <select id="member-id-info" name="member_id" required>
+                        <option value="">불러오는 중...</option>
+                    </select>
+                </div>
+                <button type="submit">정보 조회</button>
+            </form>
+        </div>
+
+    </main>
+
+    <footer>
+        <label for="result-box">결과 (복사하세요)</label>
+        <textarea id="result-box" rows="3" readonly></textarea>
+        <p id="error-message"></p>
+    </footer>
+
+    <script src="popup.js"></script>
+</body>
+</html>
