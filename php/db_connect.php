@@ -1,5 +1,9 @@
 <?php
 $db_file = __DIR__ . '/database.db';
+if (!file_exists($db_file)) {
+    header("Location: setup.php");
+    exit;
+}
 
 $dsn = "sqlite:" . $db_file;
 $options = [
