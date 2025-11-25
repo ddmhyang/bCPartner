@@ -442,8 +442,11 @@ function resetItemForm() {
 async function loadGamesPage() {
     const pageHtml = `
         <h2>도박 관리</h2>
-        <form id="add-game-form">
-            <h3>새 도박 게임 등록</h3>
+        <form id="game-form">
+            <input type="hidden" id="action_mode" value="add">
+            <input type="hidden" id="game_id" name="game_id" value="">
+            
+            <h3>도박 게임 등록/수정</h3>
             <div class="form-group">
                 <label for="game_name">게임 이름</label>
                 <input type="text" id="game_name" name="game_name" required>
@@ -456,21 +459,36 @@ async function loadGamesPage() {
                 <label for="outcomes">배율 목록 (쉼표로 구분)</label>
                 <input type="text" id="outcomes" name="outcomes" placeholder="-10,-5,0,1,5,10" required>
             </div>
-            <button type="submit">게임 등록</button>
+            
+            <button type="submit" id="form-submit-button">게임 등록</button>
+            <button type="button" id="form-cancel-button" style="display:none;">취소</button>
             <p id="form-message"></p>
         </form>
+
         <h3>도박 게임 목록</h3>
         <table id="games-table">
-            <thead><tr><th>ID</th><th>게임 이름</th><th>설명</th><th>배율 목록</th></tr></thead>
-            <tbody><tr><td colspan="4">데이터 로딩 중...</td></tr></tbody>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>게임 이름</th>
+                    <th>설명</th>
+                    <th>배율 목록</th>
+                    <th>관리</th>
+                </tr>
+            </thead>
+            <tbody><tr><td colspan="5">데이터 로딩 중...</td></tr></tbody>
         </table>
     `;
     contentElement.innerHTML = pageHtml;
-    document.getElementById('add-game-form').addEventListener('submit', handleAddGame);
+
+    document.getElementById('game-form').addEventListener('submit', handleGameSubmit);
+    document.getElementById('form-cancel-button').addEventListener('click', resetGameForm);
+
     try {
         const response = await fetch(`${API_BASE_URL}/api_get_all_games.php`);
         const result = await response.json();
         const tableBody = document.querySelector('#games-table tbody');
+
         if (result.status === 'success' && result.data.length > 0) {
             const rowsHtml = result.data.map(game => `
                 <tr>
@@ -478,31 +496,52 @@ async function loadGamesPage() {
                     <td>${game.game_name}</td>
                     <td>${game.description}</td>
                     <td>${game.outcomes}</td>
+                    <td>
+                        <button class="btn-action btn-edit" 
+                                data-id="${game.game_id}" 
+                                data-name="${game.game_name}" 
+                                data-desc="${game.description}"
+                                data-outcomes="${game.outcomes}">
+                            수정
+                        </button>
+                        <button class="btn-action btn-delete" 
+                                data-id="${game.game_id}"
+                                data-name="${game.game_name}">
+                            삭제
+                        </button>
+                    </td>
                 </tr>
             `).join('');
             tableBody.innerHTML = rowsHtml;
+            attachGameTableListeners();
         } else if (result.status === 'success') {
-            tableBody.innerHTML = '<tr><td colspan="4">등록된 도박 게임이 없습니다.</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="5">등록된 도박 게임이 없습니다.</td></tr>';
         } else {
-            tableBody.innerHTML = `<tr><td colspan="4" class="error">${result.message}</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="5" class="error">${result.message}</td></tr>`;
         }
     } catch (error) {
         document.querySelector('#games-table tbody').innerHTML = 
-            `<tr><td colspan="4" class="error">데이터 로드 오류: ${error}</td></tr>`;
+            `<tr><td colspan="5" class="error">데이터 로드 오류: ${error}</td></tr>`;
     }
 }
 
-async function handleAddGame(event) {
+async function handleGameSubmit(event) {
     event.preventDefault();
     const form = event.target;
     const messageElement = document.getElementById('form-message');
+    
+    const mode = document.getElementById('action_mode').value;
+    const apiUrl = (mode === 'add') ? 'api_add_game.php' : 'api_update_game.php';
+
     const formData = {
+        game_id: document.getElementById('game_id').value,
         game_name: form.game_name.value,
         description: form.description.value,
         outcomes: form.outcomes.value
     };
+
     try {
-        const response = await fetch(`${API_BASE_URL}/api_add_game.php`, {
+        const response = await fetch(`${API_BASE_URL}/${apiUrl}`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(formData)
@@ -511,7 +550,7 @@ async function handleAddGame(event) {
         if (result.status === 'success') {
             messageElement.textContent = result.message;
             messageElement.className = 'success';
-            form.reset();
+            resetGameForm();
             loadGamesPage();
         } else {
             messageElement.textContent = result.message;
@@ -520,6 +559,82 @@ async function handleAddGame(event) {
     } catch (error) {
         messageElement.textContent = `전송 오류: ${error}`;
         messageElement.className = 'error';
+    }
+}
+
+
+function attachGameTableListeners() {
+    const tableBody = document.querySelector('#games-table tbody');
+    tableBody.addEventListener('click', (event) => {
+        const target = event.target;
+        const gameId = target.dataset.id;
+
+        if (target.classList.contains('btn-delete')) {
+            const gameName = target.dataset.name;
+            handleDeleteGame(gameId, gameName);
+        } else if (target.classList.contains('btn-edit')) {
+            const gameData = {
+                id: gameId,
+                name: target.dataset.name,
+                desc: target.dataset.desc,
+                outcomes: target.dataset.outcomes
+            };
+            populateGameEditForm(gameData);
+        }
+    });
+}
+
+async function handleDeleteGame(gameId, gameName) {
+    if (!confirm(`정말 [${gameName}] 게임을 삭제하시겠습니까?`)) { return; }
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/api_delete_game.php`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ game_id: gameId })
+        });
+        const result = await response.json();
+        if (result.status === 'success') {
+            alert(result.message);
+            loadGamesPage();
+        } else {
+            alert(`삭제 실패: ${result.message}`);
+        }
+    } catch (error) {
+        alert(`삭제 중 오류 발생: ${error}`);
+    }
+}
+
+function populateGameEditForm(data) {
+    window.scrollTo(0, 0);
+    const form = document.getElementById('game-form');
+    
+    form.querySelector('h3').textContent = '도박 게임 정보 수정';
+    document.getElementById('action_mode').value = 'update';
+    document.getElementById('game_id').value = data.id;
+    
+    document.getElementById('game_name').value = data.name;
+    document.getElementById('description').value = data.desc;
+    document.getElementById('outcomes').value = data.outcomes;
+    
+    document.getElementById('form-submit-button').textContent = '수정 완료';
+    document.getElementById('form-cancel-button').style.display = 'inline-block';
+}
+
+function resetGameForm() {
+    const form = document.getElementById('game-form');
+    form.querySelector('h3').textContent = '도박 게임 등록';
+    document.getElementById('action_mode').value = 'add';
+    form.reset();
+    document.getElementById('game_id').value = '';
+    
+    document.getElementById('form-submit-button').textContent = '게임 등록';
+    document.getElementById('form-cancel-button').style.display = 'none';
+    
+    const msg = document.getElementById('form-message');
+    if(msg) {
+        msg.textContent = '';
+        msg.className = '';
     }
 }
 
