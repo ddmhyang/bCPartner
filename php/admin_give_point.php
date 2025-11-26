@@ -6,15 +6,10 @@ header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type");
 header("Content-Type: application/json; charset=utf-8");
 
-include 'db_connect.php';
-
 $input = json_decode(file_get_contents('php://input'), true);
 
 if (!isset($input['member_id']) || !isset($input['points']) || !isset($input['reason'])) {
-    echo json_encode([
-        'status' => 'error',
-        'message' => '필수 입력 값(member_id, points, reason)이 누락되었습니다.'
-    ]);
+    echo json_encode(['status' => 'error', 'message' => '필수 값 누락']);
     exit; 
 }
 
@@ -24,6 +19,10 @@ $reason = $input['reason'];
 
 try {
     $pdo->beginTransaction();
+
+    $stmt_m = $pdo->prepare("SELECT member_name FROM youth_members WHERE member_id = ?");
+    $stmt_m->execute([$member_id]);
+    $member_name = $stmt_m->fetchColumn() ?: $member_id;
 
     $sql_update = "UPDATE youth_members SET points = points + ? WHERE member_id = ?";
     $stmt_update = $pdo->prepare($sql_update);
@@ -36,7 +35,7 @@ try {
     $pdo->commit();
 
     $action = ($points_change >= 0) ? "지급" : "회수";
-    $message = "[{$member_id}] 님에게 {$points_change}P를 [{$reason}] 사유로 {$action}했습니다.";
+    $message = "[{$member_name}] 님에게 {$points_change}P를 [{$reason}] 사유로 {$action}했습니다.";
     
     echo json_encode([
         'status' => 'success',
@@ -47,10 +46,6 @@ try {
 
 } catch (Exception $e) {
     $pdo->rollBack();
-
-    echo json_encode([
-        'status' => 'error',
-        'message' => 'DB 작업 실패: ' . $e->getMessage()
-    ]);
+    echo json_encode(['status' => 'error', 'message' => 'DB 작업 실패: ' . $e->getMessage()]);
 }
 ?>

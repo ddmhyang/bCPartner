@@ -11,11 +11,19 @@ $input = json_decode(file_get_contents('php://input'), true);
 $member_id = $input['member_id'] ?? null;
 $item_id = $input['item_id'] ?? null;
 $quantity = (int)($input['quantity'] ?? 0);
-if (empty($member_id) || empty($item_id) || $quantity <= 0) { /*  */ exit; }
+if (empty($member_id) || empty($item_id) || $quantity <= 0) { exit; }
 
 try {
     $pdo->beginTransaction();
     
+    $stmt_m = $pdo->prepare("SELECT member_name FROM youth_members WHERE member_id = ?");
+    $stmt_m->execute([$member_id]);
+    $member_name = $stmt_m->fetchColumn() ?: $member_id;
+
+    $stmt_i = $pdo->prepare("SELECT item_name FROM youth_items WHERE item_id = ?");
+    $stmt_i->execute([$item_id]);
+    $item_name = $stmt_i->fetchColumn() ?: "아이템(ID:{$item_id})";
+
     $sql_give = "INSERT INTO youth_inventory (member_id, item_id, quantity)
                  VALUES (?, ?, ?)
                  ON CONFLICT(member_id, item_id) DO UPDATE SET quantity = quantity + excluded.quantity";
@@ -29,7 +37,7 @@ try {
     
     $pdo->commit();
     
-    $response['message'] = "[{$member_id}] 님에게 [아이템 ID: {$item_id}] {$quantity}개 지급 완료.";
+    $response['message'] = "[{$member_name}] 님에게 [{$item_name}] {$quantity}개 지급 완료.";
 
 } catch (PDOException $e) {
     $pdo->rollBack();
