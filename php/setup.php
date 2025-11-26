@@ -30,7 +30,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     "CREATE TABLE IF NOT EXISTS `youth_members` ( `member_id` VARCHAR(100) PRIMARY KEY, `member_name` VARCHAR(100) NOT NULL, `points` INT NOT NULL DEFAULT 0 );",
                     "CREATE TABLE IF NOT EXISTS `youth_inventory` ( `member_id` VARCHAR(100), `item_id` INT, `quantity` INT NOT NULL DEFAULT 1, PRIMARY KEY (`member_id`, `item_id`), FOREIGN KEY (`member_id`) REFERENCES `youth_members`(`member_id`) ON DELETE CASCADE, FOREIGN KEY (`item_id`) REFERENCES `youth_items`(`item_id`) ON DELETE CASCADE );",
                     "CREATE TABLE IF NOT EXISTS `youth_point_logs` ( `log_id` INTEGER PRIMARY KEY AUTOINCREMENT, `member_id` VARCHAR(100), `point_change` INT NOT NULL, `reason` VARCHAR(255), `log_time` TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (`member_id`) REFERENCES `youth_members`(`member_id`) ON DELETE SET NULL );",
-                    "CREATE TABLE IF NOT EXISTS `youth_item_logs` ( `log_id` INTEGER PRIMARY KEY AUTOINCREMENT, `member_id` VARCHAR(100), `item_id` INT, `quantity_change` INT NOT NULL, `reason` VARCHAR(255), `log_time` TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (`member_id`) REFERENCES `youth_members`(`member_id`) ON DELETE SET NULL, FOREIGN KEY (`item_id`) REFERENCES `youth_items`(`item_id`) ON DELETE SET NULL );"
+                    "CREATE TABLE IF NOT EXISTS `youth_item_logs` ( `log_id` INTEGER PRIMARY KEY AUTOINCREMENT, `member_id` VARCHAR(100), `item_id` INT, `quantity_change` INT NOT NULL, `reason` VARCHAR(255), `log_time` TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (`member_id`) REFERENCES `youth_members`(`member_id`) ON DELETE SET NULL, FOREIGN KEY (`item_id`) REFERENCES `youth_items`(`item_id`) ON DELETE SET NULL );",
+                    
+                    "CREATE TABLE IF NOT EXISTS `youth_status_types` ( `type_id` INTEGER PRIMARY KEY AUTOINCREMENT, `status_name` VARCHAR(100) NOT NULL, `default_duration` INT DEFAULT -1, `max_stage` INT DEFAULT 1, `can_evolve` INT DEFAULT 0 );",
+                    "CREATE TABLE IF NOT EXISTS `youth_active_statuses` ( `id` INTEGER PRIMARY KEY AUTOINCREMENT, `member_id` VARCHAR(100) NOT NULL, `type_id` INTEGER NOT NULL, `current_stage` INT DEFAULT 1, `applied_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP, `expires_at` TIMESTAMP NULL, FOREIGN KEY (`member_id`) REFERENCES `youth_members`(`member_id`) ON DELETE CASCADE, FOREIGN KEY (`type_id`) REFERENCES `youth_status_types`(`type_id`) ON DELETE CASCADE );",
+                    "CREATE TABLE IF NOT EXISTS `youth_status_logs` ( `log_id` INTEGER PRIMARY KEY AUTOINCREMENT, `member_id` VARCHAR(100), `status_name` VARCHAR(100), `action_detail` VARCHAR(255), `log_time` TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (`member_id`) REFERENCES `youth_members`(`member_id`) ON DELETE SET NULL );"
                 ];
                 foreach ($commands as $command) {
                     $pdo->exec($command);
@@ -49,22 +53,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     $message .= "<hr><p style='font-size: 1.2em; color:red; font-weight:bold;'>경고: 보안을 위해 지금 당장 이 'setup.php' 파일을 FTP에서 삭제하세요!</p>";
                     $setup_success = true;
                 } else {
-                    $message = "<p style='color:orange;'>[{$admin_username}] 계정은 이미 존재합니다. 다른 ID를 사용하거나, 'database.db' 파일을 삭제한 후 다시 시도하세요.</p>";
+                    $message = "<p style='color:orange;'>[{$admin_username}] 계정은 이미 존재합니다.</p>";
                 }
                 
             } catch (Exception $e) {
                 $message = "<h1>❌ 설정 실패!</h1>";
                 $message .= "<p style='color:red;'>오류 발생: " . $e->getMessage() . "</p>";
-                $message .= "<p>'database.db' 파일이 있는 폴더에 쓰기 권한(707 등)이 있는지 확인하세요.</p>";
             }
         }
     }
 } else {
     if (file_exists($db_file)) {
         $message = "<h2>⚠️ 이미 설치됨</h2>";
-        $message .= "<p>'database.db' 파일이 이미 존재합니다. 설치가 완료된 것으로 보입니다.</p>";
-        $message .= "<p>관리자 계정을 새로 만들어야 한다면, FTP로 접속해서 'database.db' 파일을 삭제한 후 이 페이지를 새로고침하세요.</p>";
-        $message .= "<hr><p style='font-size: 1.2em; color:red; font-weight:bold;'>보안을 위해 'setup.php' 파일을 FTP에서 삭제하는 것을 권장합니다.</p>";
+        $message .= "<p>'database.db' 파일이 이미 존재합니다.</p>";
         $setup_success = true;
     }
 }

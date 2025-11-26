@@ -46,7 +46,6 @@ try {
         $message = "잭팟! [{$member_name}] 님이 [{$game['game_name']}]({$multiplier}배)로 {$point_change}P 획득!";
     
     } else if ($point_change < 0) {
-        // 배율이 마이너스인 경우 (추가 차감)
         $pdo->prepare("UPDATE youth_members SET points = points + ? WHERE member_id = ?")->execute([$point_change, $member_id]);
         $pdo->prepare("INSERT INTO youth_point_logs (member_id, point_change, reason) VALUES (?, ?, ?)")->execute([$member_id, $point_change, "{$game['game_name']} 파산 ({$multiplier}배)"]);
         $message = "꽝! [{$member_name}] 님이 [{$game['game_name']}]({$multiplier}배)로 {$point_change}P 손해...";

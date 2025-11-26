@@ -34,6 +34,9 @@ function navigateTo(page) {
         case 'inventory':
             loadInventoryPage();
             break;
+        case 'status':
+            loadStatusPage();
+            break;
         case 'transfer_point':
             loadTransferPointPage();
             break;
@@ -45,6 +48,9 @@ function navigateTo(page) {
             break;
         case 'item_logs':
             loadItemLogsPage();
+            break;
+        case 'status_logs':
+            loadStatusLogsPage();
             break;
         case 'settings':
             loadSettingsPage();
@@ -95,17 +101,18 @@ async function loadMembersPage() {
             <button type="button" id="form-cancel-button" style="display:none;">취소</button>
             <p id="form-message"></p>
         </form>
-        <h3>전체 캐릭터 목록</h3>
+        <h3>전체 캐릭터 목록 (제목 클릭 시 정렬)</h3>
         <table id="members-table">
             <thead>
                 <tr>
-                    <th>캐릭터 번호</th>
+                    <th onclick="sortTable('members-table', 0, 'string')" style="cursor:pointer;">캐릭터 번호 ⇅</th>
                     <th>이름</th>
-                    <th>보유 포인트</th>
+                    <th onclick="sortTable('members-table', 2, 'number')" style="cursor:pointer;">보유 포인트 ⇅</th>
+                    <th>현재 상태</th>
                     <th>관리</th>
                 </tr>
             </thead>
-            <tbody><tr><td colspan="4">데이터 로딩 중...</td></tr></tbody>
+            <tbody><tr><td colspan="5">데이터 로딩 중...</td></tr></tbody>
         </table>
     `;
     contentElement.innerHTML = pageHtml;
@@ -121,6 +128,9 @@ async function loadMembersPage() {
                     <td>${member.member_id}</td>
                     <td>${member.member_name}</td>
                     <td>${member.points.toLocaleString()} P</td>
+                    <td style="color: #d9534f; font-weight: bold;">
+                        ${member.status_list ? member.status_list : '-'}
+                    </td>
                     <td>
                         <button class="btn-action btn-edit" 
                                 data-id="${member.member_id}" 
@@ -138,13 +148,13 @@ async function loadMembersPage() {
             tableBody.innerHTML = rowsHtml;
             attachMemberTableListeners();
         } else if (result.status === 'success') {
-            tableBody.innerHTML = '<tr><td colspan="4">등록된 캐릭터가 없습니다.</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="5">등록된 캐릭터가 없습니다.</td></tr>';
         } else {
-            tableBody.innerHTML = `<tr><td colspan="4" class="error">${result.message}</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="5" class="error">${result.message}</td></tr>`;
         }
     } catch (error) {
         document.querySelector('#members-table tbody').innerHTML = 
-            `<tr><td colspan="4" class="error">데이터 로드 오류: ${error}</td></tr>`;
+            `<tr><td colspan="5" class="error">데이터 로드 오류: ${error}</td></tr>`;
     }
 }
 
@@ -247,7 +257,7 @@ function resetMemberForm() {
 
 async function loadItemsPage() {
     const pageHtml = `
-        <h2>상점 관리</h2>
+<h2>상점 관리</h2>
         <form id="item-form">
             <input type="hidden" id="action_mode" value="add">
             <input type="hidden" id="item_id" name="item_id" value="">
@@ -279,14 +289,14 @@ async function loadItemsPage() {
             <button type="button" id="form-cancel-button" style="display:none;">취소</button>
             <p id="form-message"></p>
         </form>
-        <h3>상점 아이템 목록</h3>
+        <h3>상점 아이템 목록 (제목 클릭 시 정렬)</h3>
         <table id="items-table">
             <thead>
                 <tr>
-                    <th>ID</th>
+                    <th onclick="sortTable('items-table', 0, 'number')" style="cursor:pointer;">ID ⇅</th>
                     <th>이름</th>
-                    <th>가격</th>
-                    <th>재고</th>
+                    <th onclick="sortTable('items-table', 2, 'number')" style="cursor:pointer;">가격 ⇅</th>
+                    <th onclick="sortTable('items-table', 3, 'number')" style="cursor:pointer;">재고 ⇅</th>
                     <th>상태</th>
                     <th>관리</th>
                 </tr>
@@ -1142,5 +1152,304 @@ async function handleResetData() {
     } catch (error) {
         messageElement.textContent = `전송 오류: ${error}`;
         messageElement.className = 'error';
+    }
+}
+
+
+function sortTable(tableId, colIndex, type) {
+    const table = document.getElementById(tableId);
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    
+    let order = table.getAttribute('data-order') === 'asc' ? 'desc' : 'asc';
+    
+    if (table.getAttribute('data-col') !== String(colIndex)) {
+        order = 'asc';
+    }
+    
+    table.setAttribute('data-order', order);
+    table.setAttribute('data-col', colIndex);
+
+    rows.sort((rowA, rowB) => {
+        let cellA = rowA.cells[colIndex].innerText.trim();
+        let cellB = rowB.cells[colIndex].innerText.trim();
+
+        if (type === 'number') {
+            const valA = parseInt(cellA.replace(/[^0-9-]/g, '')) || 0;
+            const valB = parseInt(cellB.replace(/[^0-9-]/g, '')) || 0;
+            return order === 'asc' ? valA - valB : valB - valA;
+        } else {
+            return order === 'asc' 
+                ? cellA.localeCompare(cellB, undefined, {numeric: true}) 
+                : cellB.localeCompare(cellA, undefined, {numeric: true});
+        }
+    });
+
+    tbody.append(...rows);
+}
+
+async function loadStatusPage() {
+    const pageHtml = `
+        <h2>상태 이상 관리</h2>
+        
+        <div style="display:flex; gap: 20px;">
+            <div style="flex:1;">
+                <h3>1. 상태 종류 만들기/수정</h3>
+                <form id="status-type-form">
+                    <input type="hidden" id="status_action_mode" value="add"> <input type="hidden" id="status_type_id" name="type_id">
+                    
+                    <div class="form-group">
+                        <label>상태 이름</label>
+                        <input type="text" id="status_name" name="status_name" required>
+                    </div>
+                    <div class="form-group">
+                        <label>최대 단계</label>
+                        <input type="number" id="max_stage" name="max_stage" value="1" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>자동 악화 주기 (시간 단위, 0은 안 함)</label>
+                        <input type="number" id="evolve_interval" name="evolve_interval" value="0" min="0" placeholder="예: 1 (1시간마다)">
+                    </div>
+                    <div class="form-group">
+                        <label>기본 지속시간 (분, -1은 무한)</label>
+                        <input type="number" id="default_duration" name="default_duration" value="-1">
+                    </div>
+                    <div class="form-group-inline">
+                         <input type="checkbox" id="can_evolve" name="can_evolve" value="1">
+                         <label for="can_evolve">단계 악화 가능 (체크 필수)</label>
+                    </div>
+                    
+                    <button type="submit" id="btn-status-submit">상태 종류 등록</button>
+                    <button type="button" id="btn-status-cancel" style="display:none; background-color:#6c757d;">취소</button>
+                </form>
+                <hr>
+                <h4>등록된 상태 목록</h4>
+                <table id="status-type-table" style="width:100%; border-collapse: collapse;">
+                    <thead><tr style="background:#f1f1f1;"><th>이름</th><th>설정 정보</th><th>관리</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <div style="flex:1; border-left:1px solid #ccc; padding-left:20px;">
+                <h3>2. 캐릭터에게 상태 부여/관리</h3>
+                <form id="give-status-form">
+                    <div class="form-group">
+                        <label>대상 캐릭터</label>
+                        <select id="status_member_select" name="member_id" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label>적용할 상태</label>
+                        <select id="status_type_select" name="type_id" required></select>
+                    </div>
+                    <div class="form-group">
+                        <button type="submit" class="btn-edit" style="width:100%;">상태 부여 (1단계 시작)</button>
+                    </div>
+                    
+                    <div class="form-group" style="display:flex; gap:5px;">
+                        <button type="button" id="btn-decrease" class="btn-action" style="background:#2196F3; color:white; flex:1;">완화 (▼)</button>
+                        <button type="button" id="btn-evolve" class="btn-delete" style="background:orange; flex:1;">악화 (▲)</button>
+                        <button type="button" id="btn-cure" class="btn-action" style="background:green; color:white; flex:1;">완전 치료</button>
+                    </div>
+                </form>
+                <p id="status-message" style="margin-top:10px; font-weight:bold;"></p>
+            </div>
+        </div>
+    `;
+    contentElement.innerHTML = pageHtml;
+
+    loadStatusTypes();
+    loadMemberSelectOptions();
+
+    document.getElementById('status-type-form').addEventListener('submit', handleStatusTypeSubmit);
+    document.getElementById('btn-status-cancel').addEventListener('click', resetStatusTypeForm);
+    
+    document.getElementById('give-status-form').addEventListener('submit', (e) => handleStatusAction(e, 'add'));
+    document.getElementById('btn-evolve').addEventListener('click', (e) => handleStatusAction(e, 'evolve'));
+    document.getElementById('btn-decrease').addEventListener('click', (e) => handleStatusAction(e, 'decrease'));
+    document.getElementById('btn-cure').addEventListener('click', (e) => handleStatusAction(e, 'cure'));
+}
+
+async function loadStatusTypes() {
+    const res = await fetch(`${API_BASE_URL}/api_get_status_types.php`);
+    const json = await res.json();
+    const tableBody = document.querySelector('#status-type-table tbody');
+    const select = document.getElementById('status_type_select');
+    
+    tableBody.innerHTML = '';
+    select.innerHTML = '<option value="">-- 상태 선택 --</option>';
+
+    if(json.status === 'success') {
+        json.data.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${item.status_name}</td>
+                <td style="font-size:0.9em; color:#555;">
+                    최대 ${item.max_stage}단계<br>
+                    ${item.can_evolve == 1 ? '악화가능' : '고정상태'} 
+                    (${item.evolve_interval > 0 ? item.evolve_interval + '시간마다' : '자동X'})<br>
+                    지속: ${item.default_duration == -1 ? '무한' : item.default_duration + '분'}
+                </td>
+                <td>
+                    <button class="btn-action btn-edit" onclick='editStatusType(${JSON.stringify(item)})'>수정</button>
+                    <button class="btn-action btn-delete" onclick="deleteStatusType(${item.type_id}, '${item.status_name}')">삭제</button>
+                </td>
+            `;
+            tableBody.appendChild(tr);
+
+            const opt = document.createElement('option');
+            opt.value = item.type_id;
+            opt.textContent = item.status_name;
+            opt.dataset.duration = item.default_duration;
+            select.appendChild(opt);
+        });
+    }
+}
+
+async function handleStatusTypeSubmit(e) {
+    e.preventDefault();
+    const form = e.target;
+    const mode = document.getElementById('status_action_mode').value;
+    const apiUrl = (mode === 'add') ? 'api_add_status_type.php' : 'api_update_status_type.php';
+    
+    const body = {
+        type_id: document.getElementById('status_type_id').value,
+        status_name: document.getElementById('status_name').value,
+        max_stage: document.getElementById('max_stage').value,
+        default_duration: document.getElementById('default_duration').value,
+        can_evolve: document.getElementById('can_evolve').checked ? 1 : 0,
+        evolve_interval: document.getElementById('evolve_interval').value
+    };
+
+    const res = await fetch(`${API_BASE_URL}/${apiUrl}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(body)
+    });
+    const json = await res.json();
+    alert(json.message);
+    if(json.status === 'success') {
+        resetStatusTypeForm();
+        loadStatusTypes();
+    }
+}
+
+window.editStatusType = function(item) {
+    document.getElementById('status_action_mode').value = 'update';
+    document.getElementById('status_type_id').value = item.type_id;
+    
+    document.getElementById('status_name').value = item.status_name;
+    document.getElementById('max_stage').value = item.max_stage;
+    document.getElementById('evolve_interval').value = item.evolve_interval;
+    document.getElementById('default_duration').value = item.default_duration;
+    document.getElementById('can_evolve').checked = (item.can_evolve == 1);
+    
+    document.getElementById('btn-status-submit').textContent = '수정 완료';
+    document.getElementById('btn-status-cancel').style.display = 'inline-block';
+    
+    document.getElementById('status-type-form').scrollIntoView({ behavior: 'smooth' });
+};
+
+window.deleteStatusType = async function(typeId, name) {
+    if (!confirm(`[${name}] 상태를 정말 삭제하시겠습니까?\n이 상태에 걸려있는 모든 캐릭터의 상태도 함께 사라집니다.`)) return;
+
+    const res = await fetch(`${API_BASE_URL}/api_delete_status_type.php`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ type_id: typeId })
+    });
+    const json = await res.json();
+    alert(json.message);
+    if(json.status === 'success') {
+        loadStatusTypes();
+    }
+};
+
+function resetStatusTypeForm() {
+    const form = document.getElementById('status-type-form');
+    form.reset();
+    document.getElementById('status_action_mode').value = 'add';
+    document.getElementById('status_type_id').value = '';
+    document.getElementById('btn-status-submit').textContent = '상태 종류 등록';
+    document.getElementById('btn-status-cancel').style.display = 'none';
+}
+
+async function loadMemberSelectOptions() {
+    const res = await fetch(`${API_BASE_URL}/api_get_all_members.php`);
+    const json = await res.json();
+    const select = document.getElementById('status_member_select');
+    populateSelect(select, json.data, 'member_id', 'member_name');
+}
+
+async function handleStatusAction(e, action) {
+    e.preventDefault(); 
+    const memberId = document.getElementById('status_member_select').value;
+    const typeSelect = document.getElementById('status_type_select');
+    const typeId = typeSelect.value;
+    const duration = typeSelect.options[typeSelect.selectedIndex]?.dataset.duration || -1;
+    const msgBox = document.getElementById('status-message');
+
+    if(!memberId || !typeId) {
+        msgBox.textContent = "캐릭터와 상태를 선택해주세요.";
+        msgBox.style.color = "red";
+        return;
+    }
+
+    const res = await fetch(`${API_BASE_URL}/api_set_member_status.php`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            action: action,
+            member_id: memberId,
+            type_id: typeId,
+            duration: duration
+        })
+    });
+    const json = await res.json();
+    
+    msgBox.textContent = json.message;
+    msgBox.style.color = json.status === 'success' ? 'green' : 'red';
+}
+
+async function loadStatusLogsPage() {
+    const pageHtml = `
+        <h2>상태 이상 로그</h2>
+        <h3>전체 상태 변동 내역</h3>
+        <table id="status-logs-table">
+            <thead>
+                <tr>
+                    <th>시간</th>
+                    <th>캐릭터 이름</th>
+                    <th>상태 이름</th>
+                    <th>변동 내용</th>
+                </tr>
+            </thead>
+            <tbody><tr><td colspan="4">데이터 로딩 중...</td></tr></tbody>
+        </table>
+    `;
+    contentElement.innerHTML = pageHtml;
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api_get_all_status_logs.php`);
+        const result = await response.json();
+        const tableBody = document.querySelector('#status-logs-table tbody');
+
+        if (result.status === 'success' && result.data.length > 0) {
+            const rowsHtml = result.data.map(log => `
+                <tr>
+                    <td>${log.log_time}</td>
+                    <td>${log.member_name} (${log.member_id})</td>
+                    <td style="font-weight:bold;">${log.status_name}</td>
+                    <td>${log.action_detail}</td>
+                </tr>
+            `).join('');
+            tableBody.innerHTML = rowsHtml;
+        } else if (result.status === 'success') {
+            tableBody.innerHTML = '<tr><td colspan="4">기록된 상태 로그가 없습니다.</td></tr>';
+        } else {
+            tableBody.innerHTML = `<tr><td colspan="4" class="error">${result.message}</td></tr>`;
+        }
+    } catch (error) {
+        document.querySelector('#status-logs-table tbody').innerHTML = 
+            `<tr><td colspan="4" class="error">데이터 로드 오류: ${error}</td></tr>`;
     }
 }

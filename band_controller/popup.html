@@ -12,11 +12,10 @@
 
     <nav class="tab-nav">
         <button class="tab-button active" data-tab="point">포인트</button>
-        <button class="tab-button" data-tab="transfer-point">포인트 양도</button>
-        <button class="tab-button" data-tab="transfer-item">아이템 양도</button>
-        <button class="tab-button" data-tab="gamble">도박</button>
+        <button class="tab-button" data-tab="status">상태</button>
+        <button class="tab-button" data-tab="transfer-point">포인트 양도</button> <button class="tab-button" data-tab="transfer-item">아이템 양도</button> <button class="tab-button" data-tab="gamble">도박</button>
         <button class="tab-button" data-tab="item">아이템 지급</button>
-        <button class="tab-button" data-tab="info">정보조회</button>
+        <button class="tab-button" data-tab="info">정보</button>
     </nav>
 
     <main class="content-wrapper">
@@ -41,6 +40,30 @@
             </form>
         </div>
 
+        <div id="status-tab" class="tab-content">
+            <form id="status-form" class="tab-form">
+                <div class="form-group">
+                    <label for="member-id-status">회원 선택</label>
+                    <select id="member-id-status" name="member_id" required>
+                        <option value="">불러오는 중...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="status-type-select">상태 종류</label>
+                    <select id="status-type-select" name="type_id" required>
+                        <option value="">불러오는 중...</option>
+                    </select>
+                </div>
+                
+                <div style="display: flex; gap: 5px; margin-top: 15px;">
+                    <button type="button" id="btn-status-add" style="flex:1; background-color:#007bff; font-size:0.8em;">부여</button>
+                    <button type="button" id="btn-status-decrease" style="flex:1; background-color:#2196F3; font-size:0.8em;">완화▼</button>
+                    <button type="button" id="btn-status-evolve" style="flex:1; background-color:#ff9800; font-size:0.8em;">악화▲</button>
+                    <button type="button" id="btn-status-cure" style="flex:1; background-color:#4caf50; font-size:0.8em;">치료</button>
+                </div>
+            </form>
+        </div>
+
         <div id="transfer-point-tab" class="tab-content">
             <form id="transfer-point-form" class="tab-form">
                 <div class="form-group">
@@ -62,9 +85,9 @@
                 <button type="submit">포인트 양도</button>
             </form>
         </div>
-
+        
         <div id="transfer-item-tab" class="tab-content">
-            <form id="transfer-item-form" class="tab-form">
+             <form id="transfer-item-form" class="tab-form">
                 <div class="form-group">
                     <label for="sender-id-item-transfer">보내는 분</label>
                     <select id="sender-id-item-transfer" name="sender_id" required>
