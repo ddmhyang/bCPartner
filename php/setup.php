@@ -50,7 +50,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     $message = "<h2>✅ 설정 완료!</h2>";
                     $message .= "<p style='color:green; font-weight:bold;'>[{$admin_username}] 계정이 성공적으로 생성되었습니다.</p>";
                     $message .= "<p>이제 <b>login.php</b> 페이지로 이동해서 로그인하세요.</p>";
-                    $message .= "<hr><p style='font-size: 1.2em; color:red; font-weight:bold;'>경고: 보안을 위해 지금 당장 이 'setup.php' 파일을 FTP에서 삭제하세요!</p>";
                     $setup_success = true;
                 } else {
                     $message = "<p style='color:orange;'>[{$admin_username}] 계정은 이미 존재합니다.</p>";
