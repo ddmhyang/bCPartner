@@ -23,11 +23,10 @@ if (empty($game_id) || empty($game_name) || empty($outcomes)) {
     $response['message'] = '배율 목록 형식이 잘못되었습니다. (예: -10,-5,1,10)';
 } else {
     try {
-        $sql = "UPDATE youth_gambling_games 
-                SET game_name = ?, description = ?, outcomes = ? 
-                WHERE game_id = ?";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([$game_name, $description, $outcomes, (int)$game_id]);
+        $sql = "SELECT game_id, game_name, description, outcomes 
+                    FROM youth_gambling_games 
+                    ORDER BY game_id ASC";
+        $stmt = $pdo->query($sql);
         
         $response['message'] = "도박 게임 [{$game_name}] 정보가 수정되었습니다.";
 

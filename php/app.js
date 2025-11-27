@@ -1103,19 +1103,27 @@ async function loadItemLogsPage() {
 async function loadSettingsPage() {
     const pageHtml = `
         <h2>설정</h2>
-        <h3>데이터 초기화 (시즌 2 시작)</h3>
-        <div class="form-group">
-            <p>이 기능은 <strong>관리자 계정, 상점 아이템, 도박 규칙</strong>을 제외한<br>
-            <strong>모든 캐릭터, 인벤토리, 포인트 로그, 아이템 로그</strong>를 영구적으로 삭제합니다.</p>
-            <p style="font-weight:bold; color:red;">절대로 되돌릴 수 없습니다. 신중하게 사용하세요.</p>
-            
-            <button id="reset-data-button" class="btn-action btn-delete">모든 운영 데이터 초기화</button>
+        
+        <div style="border: 1px solid #ccc; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h3>1. 시즌 초기화 (데이터만 삭제)</h3>
+            <p><strong>관리자 계정, 상점 아이템, 도박 규칙, 상태 종류 설정</strong>은 유지됩니다.<br>
+            그 외 <strong>모든 캐릭터, 인벤토리, 모든 로그</strong>만 삭제됩니다.</p>
+            <button id="reset-data-button" class="btn-action btn-delete">시즌 데이터 초기화</button>
         </div>
+
+        <div style="border: 1px solid #ffcccc; padding: 20px; border-radius: 8px; background-color: #fff5f5;">
+            <h3 style="color: red;">2. 시스템 완전 초기화 (공장 초기화)</h3>
+            <p><strong>경고:</strong> 데이터베이스 파일 자체를 삭제합니다.<br>
+            관리자 계정을 포함한 <strong>모든 데이터가 사라지며</strong>, 처음 설치 화면(setup.php)으로 돌아갑니다.</p>
+            <button id="factory-reset-button" class="btn-action btn-delete" style="background-color: darkred;">시스템 완전 삭제 (재설치)</button>
+        </div>
+
         <p id="form-message"></p>
     `;
     contentElement.innerHTML = pageHtml;
 
     document.getElementById('reset-data-button').addEventListener('click', handleResetData);
+    document.getElementById('factory-reset-button').addEventListener('click', handleFactoryReset);
 }
 
 async function handleResetData() {
@@ -1155,6 +1163,36 @@ async function handleResetData() {
     }
 }
 
+async function handleFactoryReset() {
+    const messageElement = document.getElementById('form-message');
+    messageElement.textContent = '';
+    
+    if (!confirm("정말 DB 자체를 삭제하시겠습니까?\n모든 설정이 날아가고 관리자 계정도 다시 만들어야 합니다.")) {
+        return;
+    }
+    
+    const confirmation = prompt("삭제하려면 '삭제합니다' 라고 입력하세요.");
+    if (confirmation !== "삭제합니다") {
+        alert("입력이 일치하지 않아 취소합니다.");
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api_factory_reset.php`, { method: 'POST' });
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            alert(result.message);
+            window.location.href = 'setup.php'; 
+        } else {
+            messageElement.textContent = result.message;
+            messageElement.className = 'error';
+        }
+    } catch (error) {
+        messageElement.textContent = `오류 발생: ${error}`;
+        messageElement.className = 'error';
+    }
+}
 
 function sortTable(tableId, colIndex, type) {
     const table = document.getElementById(tableId);

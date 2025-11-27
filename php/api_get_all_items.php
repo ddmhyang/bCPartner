@@ -12,9 +12,9 @@ include 'db_connect.php';
 $response = ['status' => 'success', 'data' => []];
 
 try {
-    $sql = "SELECT item_id, item_name, item_description, price, stock, status 
+$sql = "SELECT item_id, item_name, item_description, price, stock, status 
             FROM youth_items 
-            ORDER BY item_id DESC";
+            ORDER BY item_id ASC";
     $stmt = $pdo->query($sql);
     $items_list = $stmt->fetchAll();
     
