@@ -1,13 +1,20 @@
 {
-    "manifest_version": 3,
-    "name": "밴드 운영 조종기",
-    "version": "0.1.1",
-    
-    "action": {
-        "default_popup": "popup.html"
-    },
-
-    "host_permissions": [
-        "https://주소.dothome.co.kr/"
-    ]
+  "manifest_version": 3,
+  "name": "B-Partner 밴드 조종기 v2",
+  "version": "2.0",
+  "description": "통합 api_handler.php 연동 관리 도구",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://z3rdk9.dothome.co.kr/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon.png",
+      "48": "icon.png",
+      "128": "icon.png"
+    }
+  }
 }

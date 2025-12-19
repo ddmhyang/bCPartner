@@ -1,10 +1,10 @@
 <?php
 include 'db_connect.php';
-session_start();
+if (session_status() === PHP_SESSION_NONE) session_start();
 header('Content-Type: application/json; charset=utf-8');
 
 if (!isset($_SESSION['admin_username'])) {
-    die(json_encode(['status' => 'error', 'message' => 'Unauthorized']));
+    die(json_encode(['status' => 'error', 'message' => '로그인 세션 만료']));
 }
 
 $action = $_GET['action'] ?? '';
@@ -12,53 +12,84 @@ $input = json_decode(file_get_contents('php://input'), true);
 
 try {
     switch ($action) {
+        // [조회 기능]
         case 'get_members':
-            $stmt = $pdo->query("SELECT m.*, (SELECT GROUP_CONCAT(t.type_name) FROM youth_member_status ms JOIN youth_status_types t ON ms.type_id = t.type_id WHERE ms.member_id = m.member_id) as status_names FROM youth_members m");
+            $stmt = $pdo->query("SELECT member_id, member_name, points FROM youth_members ORDER BY member_id ASC");
             echo json_encode(['status' => 'success', 'data' => $stmt->fetchAll()]);
             break;
 
-        case 'add_member':
-            $pdo->prepare("INSERT INTO youth_members (member_name, points) VALUES (?, 0)")->execute([$input['name']]);
-            echo json_encode(['status' => 'success']);
+        case 'get_items':
+            echo json_encode(['status' => 'success', 'data' => $pdo->query("SELECT * FROM youth_items")->fetchAll()]);
+            break;
+
+        case 'get_status_types':
+            echo json_encode(['status' => 'success', 'data' => $pdo->query("SELECT type_id, type_name as status_name FROM youth_status_types")->fetchAll()]);
             break;
 
         case 'get_member_detail':
             $id = $_GET['member_id'];
-            $m = $pdo->prepare("SELECT * FROM youth_members WHERE member_id = ?");
-            $m->execute([$id]);
-            $res = $m->fetch();
-            $inv = $pdo->prepare("SELECT i.*, inv.quantity FROM youth_inventory inv JOIN youth_items i ON inv.item_id = i.item_id WHERE inv.member_id = ?");
+            $stmt = $pdo->prepare("SELECT * FROM youth_members WHERE member_id = ?");
+            $stmt->execute([$id]);
+            $res = $stmt->fetch();
+            $inv = $pdo->prepare("SELECT i.item_id, i.item_name, inv.quantity FROM youth_inventory inv JOIN youth_items i ON inv.item_id = i.item_id WHERE inv.member_id = ?");
             $inv->execute([$id]);
             $res['inventory'] = $inv->fetchAll();
             echo json_encode(['status' => 'success', 'data' => $res]);
             break;
 
-        case 'update_status_time':
-            $parts = explode(':', $input['time_str']);
-            $min = ($parts[0] * 60) + ($parts[1] ?? 0);
-            $pdo->prepare("UPDATE youth_status_types SET evolve_interval = ? WHERE type_id = ?")->execute([$min, $input['type_id']]);
+        // [핵심 액션 기능]
+        case 'bulk_point':
+            $pdo->beginTransaction();
+            foreach ($input['targets'] as $tid) {
+                $pdo->prepare("UPDATE youth_members SET points = points + ? WHERE member_id = ?")->execute([$input['amount'], $tid]);
+                $pdo->prepare("INSERT INTO youth_point_logs (member_id, points_change, reason) VALUES (?, ?, ?)")->execute([$tid, $input['amount'], $input['reason'] ?? '관리자 조작']);
+            }
+            $pdo->commit();
             echo json_encode(['status' => 'success']);
             break;
 
-        case 'get_logs':
-            $type = $_GET['type'];
-            $table = ($type === 'points') ? 'youth_point_logs' : 'youth_item_logs';
-            $sql = "SELECT l.*, m.member_name FROM $table l JOIN youth_members m ON l.member_id = m.member_id ORDER BY log_id DESC";
-            echo json_encode(['status' => 'success', 'data' => $pdo->query($sql)->fetchAll()]);
+        case 'transfer_points_multi':
+            $pdo->beginTransaction();
+            foreach ($input['receivers'] as $r) {
+                $pdo->prepare("UPDATE youth_members SET points = points - ? WHERE member_id = ?")->execute([$r['amount'], $input['sender_id']]);
+                $pdo->prepare("UPDATE youth_members SET points = points + ? WHERE member_id = ?")->execute([$r['amount'], $r['id']]);
+            }
+            $pdo->commit();
+            echo json_encode(['status' => 'success']);
             break;
 
-        case 'download_db':
-            $file = 'database.db';
-            header('Content-Type: application/octet-stream');
-            header('Content-Disposition: attachment; filename="backup_'.date('Ymd').'.db"');
-            readfile($file);
-            exit;
-
-        case 'reset_season':
-            $pdo->exec("DELETE FROM youth_inventory; DELETE FROM youth_point_logs; DELETE FROM youth_item_logs; DELETE FROM youth_member_status;");
-            echo json_encode(['status' => 'success', 'message' => '시즌 초기화 완료']);
+        case 'set_member_status':
+            $mid = $input['member_id']; $tid = $input['type_id']; $mode = $input['action'];
+            if($mode == 'add') $pdo->prepare("INSERT OR IGNORE INTO youth_member_status (member_id, type_id) VALUES (?,?)")->execute([$mid, $tid]);
+            elseif($mode == 'cure') $pdo->prepare("DELETE FROM youth_member_status WHERE member_id = ? AND type_id = ?")->execute([$mid, $tid]);
+            echo json_encode(['status' => 'success', 'message' => '상태 변경 완료']);
             break;
+
+        case 'admin_give_item':
+        case 'buy_item':
+            $mid = $input['member_id']; $iid = $input['item_id']; $qty = $input['quantity'];
+            $pdo->beginTransaction();
+            if ($action == 'buy_item') {
+                $item = $pdo->prepare("SELECT price FROM youth_items WHERE item_id = ?"); $item->execute([$iid]);
+                $cost = $item->fetchColumn() * $qty;
+                $pdo->prepare("UPDATE youth_members SET points = points - ? WHERE member_id = ?")->execute([$cost, $mid]);
+            }
+            $pdo->prepare("INSERT INTO youth_inventory (member_id, item_id, quantity) VALUES (?,?,?) ON CONFLICT(member_id, item_id) DO UPDATE SET quantity = quantity + EXCLUDED.quantity")->execute([$mid, $iid, $qty]);
+            $pdo->commit();
+            echo json_encode(['status' => 'success']);
+            break;
+
+        case 'run_gamble':
+            $arr = explode(',', str_replace(' ', '', $input['outcomes']));
+            $multiplier = (float)$arr[array_rand($arr)];
+            $diff = floor($input['bet_amount'] * $multiplier) - $input['bet_amount'];
+            $pdo->prepare("UPDATE youth_members SET points = points + ? WHERE member_id = ?")->execute([$diff, $input['member_id']]);
+            echo json_encode(['status' => 'success', 'multiplier' => $multiplier]);
+            break;
+
+        default: echo json_encode(['status' => 'error', 'message' => '지원하지 않는 액션']);
     }
 } catch (Exception $e) {
+    if ($pdo->inTransaction()) $pdo->rollBack();
     echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
 }
