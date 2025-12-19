@@ -1,0 +1,13 @@
+{
+    "manifest_version": 3,
+    "name": "밴드 운영 조종기",
+    "version": "0.1.1",
+    
+    "action": {
+        "default_popup": "popup.html"
+    },
+
+    "host_permissions": [
+        "https://주소.dothome.co.kr/"
+    ]
+}
