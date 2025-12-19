@@ -1,4 +1,7 @@
 <?php
+// ✨ [필수] 한국 시간 설정 (이 줄이 꼭 있어야 합니다!)
+date_default_timezone_set('Asia/Seoul');
+
 $db_file = __DIR__ . '/database.db';
 
 if (!file_exists($db_file)) {

@@ -5,8 +5,9 @@ header("Access-Control-Allow-Origin: *");
 header("Content-Type: application/json; charset=utf-8");
 
 try {
+    // ✨ [수정됨] datetime(L.log_time, '+9 hours') as log_time
     $sql = "SELECT 
-                L.log_time,
+                datetime(L.log_time, '+9 hours') as log_time,
                 L.member_id,
                 L.status_name,
                 L.action_detail,

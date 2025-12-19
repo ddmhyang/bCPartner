@@ -1,6 +1,8 @@
 const API_BASE_URL = '.'; 
 
 const contentElement = document.getElementById('app-content');
+// 체크박스로 선택된 회원들을 기억하기 위한 변수
+let selectedMembers = new Set();
 
 document.addEventListener('DOMContentLoaded', () => {
     const navLinks = document.querySelectorAll('#main-nav a[data-page]');
@@ -79,97 +81,200 @@ function populateSelect(selectElement, data, valueField, textField, optionalFiel
     selectElement.disabled = false;
 }
 
+// ---------------------------------------------------------
+// 1. 회원 관리
+// ---------------------------------------------------------
 async function loadMembersPage() {
+    selectedMembers.clear();
+
     const pageHtml = `
         <h2>캐릭터 관리</h2>
-        <form id="member-form">
+        
+        <form id="member-form" style="margin-bottom: 20px; padding: 15px; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             <input type="hidden" id="action_mode" value="add">
-            <h3>새 캐릭터 등록 (수정 시 여기를 보세요)</h3>
-            <div class="form-group">
-                <label for="member_id">캐릭터 번호</label>
-                <input type="text" id="member_id" name="member_id" required>
+            <input type="hidden" id="edit_member_id" value="">
+            
+            <div style="display:flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin:0;">새 캐릭터 등록</h3>
+                <button type="button" id="form-cancel-button" style="display:none; padding:5px 10px; font-size:0.8em; background:#666;">취소</button>
             </div>
-            <div class="form-group">
-                <label for="member_name">이름 (표시용)</label>
-                <input type="text" id="member_name" name="member_name" required>
+            
+            <div class="form-group-inline" style="margin-top:10px; display:flex; gap:10px;">
+                <input type="text" id="member_name" name="member_name" placeholder="캐릭터 이름 입력" required style="flex:1; padding:10px;">
+                <input type="number" id="edit_points" name="points" placeholder="포인트 (수정 시)" style="width:100px; display:none;">
+                <button type="submit" id="form-submit-button" style="width:100px;">등록</button>
             </div>
-            <div class="form-group" id="points-group" style="display:none;">
-                <label for="points">포인트</label>
-                <input type="number" id="points" name="points" value="0" required>
-            </div>
-            <button type="submit" id="form-submit-button">등록하기</button>
-            <button type="button" id="form-cancel-button" style="display:none;">취소</button>
             <p id="form-message"></p>
         </form>
+
+        <div class="bulk-actions" style="background:#e3f2fd; padding:15px; border-radius:8px; margin-bottom:20px; border:1px solid #90caf9;">
+            <strong>✨ 선택된 멤버 일괄 작업 (<span id="selected-count" style="color:blue; font-weight:bold;">0</span>명)</strong>
+            <div style="margin-top:10px; display:flex; gap:5px; flex-wrap:wrap;">
+                <button onclick="openBulkModal('point')" class="btn-action" style="background:#673ab7; color:white;">💰 포인트 지급/회수</button>
+                <button onclick="openBulkModal('item')" class="btn-action" style="background:#ff5722; color:white;">🎁 아이템 지급</button>
+                <button onclick="openBulkModal('status')" class="btn-action" style="background:#009688; color:white;">💊 상태 부여</button>
+                <button onclick="selectAllMembers()" class="btn-action" style="background:#607d8b; color:white;">✔ 전체 선택/해제</button>
+            </div>
+        </div>
+
         <h3>전체 캐릭터 목록 (제목 클릭 시 정렬)</h3>
         <table id="members-table">
             <thead>
                 <tr>
-                    <th onclick="sortTable('members-table', 0, 'string')" style="cursor:pointer;">캐릭터 번호 ⇅</th>
-                    <th>이름</th>
-                    <th onclick="sortTable('members-table', 2, 'number')" style="cursor:pointer;">보유 포인트 ⇅</th>
+                    <th style="width:40px; text-align:center;">선택</th>
+                    <th onclick="sortTable('members-table', 1, 'number')" style="cursor:pointer;">번호 ⇅</th>
+                    <th onclick="sortTable('members-table', 2, 'string')" style="cursor:pointer;">이름 ⇅</th>
+                    <th onclick="sortTable('members-table', 3, 'number')" style="cursor:pointer;">포인트 ⇅</th>
                     <th>현재 상태</th>
                     <th>관리</th>
                 </tr>
             </thead>
-            <tbody><tr><td colspan="5">데이터 로딩 중...</td></tr></tbody>
+            <tbody><tr><td colspan="6">데이터 로딩 중...</td></tr></tbody>
         </table>
     `;
+    
     contentElement.innerHTML = pageHtml;
+    
     document.getElementById('member-form').addEventListener('submit', handleMemberSubmit);
     document.getElementById('form-cancel-button').addEventListener('click', resetMemberForm);
+
+    await fetchAndRenderMembers();
+}
+
+async function fetchAndRenderMembers() {
     try {
         const response = await fetch(`${API_BASE_URL}/api_get_all_members.php`);
         const result = await response.json();
         const tableBody = document.querySelector('#members-table tbody');
+
         if (result.status === 'success' && result.data.length > 0) {
             const rowsHtml = result.data.map(member => `
-                <tr data-id="${member.member_id}">
+                <tr data-id="${member.member_id}" class="${selectedMembers.has(String(member.member_id)) ? 'selected-row' : ''}" style="${selectedMembers.has(String(member.member_id)) ? 'background-color:#e3f2fd;' : ''}">
+                    <td style="text-align:center;">
+                        <input type="checkbox" class="member-checkbox" value="${member.member_id}" 
+                            onchange="toggleMemberSelection('${member.member_id}')">
+                    </td>
                     <td>${member.member_id}</td>
                     <td>${member.member_name}</td>
                     <td>${member.points.toLocaleString()} P</td>
-                    <td style="color: #d9534f; font-weight: bold;">
-                        ${member.status_list ? member.status_list : '-'}
-                    </td>
+                    <td style="color: #d9534f; font-weight: bold;">${member.status_list || '-'}</td>
                     <td>
-                        <button class="btn-action btn-edit" 
-                                data-id="${member.member_id}" 
-                                data-name="${member.member_name}" 
-                                data-points="${member.points}">
-                            수정
-                        </button>
-                        <button class="btn-action btn-delete" 
-                                data-id="${member.member_id}">
-                            삭제
-                        </button>
+                        <button class="btn-action btn-edit" onclick="populateEditForm('${member.member_id}', '${member.member_name}', ${member.points})">수정</button>
+                        <button class="btn-action btn-delete" onclick="handleDeleteMember('${member.member_id}')">삭제</button>
                     </td>
                 </tr>
             `).join('');
             tableBody.innerHTML = rowsHtml;
-            attachMemberTableListeners();
+            
+            document.querySelectorAll('.member-checkbox').forEach(cb => {
+                if(selectedMembers.has(cb.value)) cb.checked = true;
+            });
+            
         } else if (result.status === 'success') {
-            tableBody.innerHTML = '<tr><td colspan="5">등록된 캐릭터가 없습니다.</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="6">등록된 캐릭터가 없습니다.</td></tr>';
         } else {
-            tableBody.innerHTML = `<tr><td colspan="5" class="error">${result.message}</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="6" class="error">${result.message}</td></tr>`;
         }
     } catch (error) {
-        document.querySelector('#members-table tbody').innerHTML = 
-            `<tr><td colspan="5" class="error">데이터 로드 오류: ${error}</td></tr>`;
+        const tb = document.querySelector('#members-table tbody');
+        if(tb) tb.innerHTML = `<tr><td colspan="6" class="error">로드 오류: ${error}</td></tr>`;
+    }
+}
+
+window.toggleMemberSelection = function(id) {
+    id = String(id);
+    const row = document.querySelector(`tr[data-id="${id}"]`);
+    if (selectedMembers.has(id)) {
+        selectedMembers.delete(id);
+        if(row) row.style.backgroundColor = '';
+    } else {
+        selectedMembers.add(id);
+        if(row) row.style.backgroundColor = '#e3f2fd';
+    }
+    document.getElementById('selected-count').textContent = selectedMembers.size;
+};
+
+window.selectAllMembers = function() {
+    const checkboxes = document.querySelectorAll('.member-checkbox');
+    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+    checkboxes.forEach(cb => {
+        cb.checked = !allChecked;
+        toggleMemberSelection(cb.value);
+    });
+};
+
+window.openBulkModal = async function(type) {
+    const targets = Array.from(selectedMembers);
+    if (targets.length === 0) {
+        alert("선택된 멤버가 없습니다.");
+        return;
+    }
+
+    let data = {};
+    if (type === 'point') {
+        const amount = prompt(`선택된 ${targets.length}명에게 지급할 포인트 (음수는 회수):`, "1000");
+        if (amount === null) return;
+        const reason = prompt("사유:", "단체 지급");
+        if (reason === null) return;
+        data = { amount: parseInt(amount), reason: reason };
+    } 
+    else if (type === 'item') {
+        const itemId = prompt("지급할 아이템 ID 입력:", "");
+        if (!itemId) return;
+        const quantity = prompt("수량 입력:", "1");
+        if (!quantity) return;
+        data = { item_id: parseInt(itemId), quantity: parseInt(quantity) };
+    }
+    else if (type === 'status') {
+        const typeId = prompt("부여할 상태 종류 ID 입력:", "");
+        if (!typeId) return;
+        data = { type_id: parseInt(typeId) };
+    }
+
+    if (confirm(`정말 ${targets.length}명에게 실행하시겠습니까?`)) {
+        await executeBulkAction(type, targets, data);
+    }
+};
+
+async function executeBulkAction(type, targets, data) {
+    try {
+        const res = await fetch(`${API_BASE_URL}/api_bulk_operation.php`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ type, targets, data })
+        });
+        const text = await res.text();
+        let result;
+        try { result = JSON.parse(text); } catch(e) { throw new Error(text); }
+
+        if(result.status === 'success') {
+            alert(result.message);
+            await fetchAndRenderMembers();
+            selectedMembers.clear();
+            document.getElementById('selected-count').textContent = '0';
+        } else {
+            alert("실패: " + result.message);
+        }
+    } catch (error) {
+        alert("오류 발생: " + error.message);
     }
 }
 
 async function handleMemberSubmit(event) {
     event.preventDefault();
-    const form = event.target;
     const messageElement = document.getElementById('form-message');
     const mode = document.getElementById('action_mode').value;
-    const apiUrl = (mode === 'add') ? 'api_add_member.php' : 'api_update_member.php';
-    const formData = {
-        member_id: form.member_id.value,
-        member_name: form.member_name.value,
-        points: parseInt(form.points.value)
-    };
-    if (mode === 'add') { delete formData.points; }
+    const name = document.getElementById('member_name').value;
+    
+    let apiUrl = 'api_add_member.php';
+    let formData = { member_name: name };
+
+    if (mode === 'update') {
+        apiUrl = 'api_update_member.php';
+        formData.member_id = document.getElementById('edit_member_id').value;
+        formData.points = parseInt(document.getElementById('edit_points').value);
+    }
+
     try {
         const response = await fetch(`${API_BASE_URL}/${apiUrl}`, {
             method: 'POST',
@@ -177,11 +282,12 @@ async function handleMemberSubmit(event) {
             body: JSON.stringify(formData)
         });
         const result = await response.json();
+        
         if (result.status === 'success') {
             messageElement.textContent = result.message;
             messageElement.className = 'success';
             resetMemberForm();
-            loadMembersPage();
+            await fetchAndRenderMembers();
         } else {
             messageElement.textContent = result.message;
             messageElement.className = 'error';
@@ -192,20 +298,39 @@ async function handleMemberSubmit(event) {
     }
 }
 
-function attachMemberTableListeners() {
-    const tableBody = document.querySelector('#members-table tbody');
-    tableBody.addEventListener('click', (event) => {
-        const target = event.target;
-        const memberId = target.dataset.id;
-        if (target.classList.contains('btn-delete')) {
-            handleDeleteMember(memberId);
-        } else if (target.classList.contains('btn-edit')) {
-            const memberName = target.dataset.name;
-            const memberPoints = parseInt(target.dataset.points);
-            populateEditForm(memberId, memberName, memberPoints);
-        }
-    });
-}
+window.populateEditForm = function(id, name, points) {
+    window.scrollTo(0, 0); 
+    const form = document.getElementById('member-form');
+    form.querySelector('h3').textContent = '캐릭터 정보 수정';
+    
+    document.getElementById('action_mode').value = 'update';
+    document.getElementById('edit_member_id').value = id;
+    document.getElementById('member_name').value = name;
+    
+    const pointInput = document.getElementById('edit_points');
+    pointInput.style.display = 'block';
+    pointInput.value = points;
+
+    const submitBtn = document.getElementById('form-submit-button');
+    submitBtn.textContent = '수정 완료';
+    submitBtn.style.backgroundColor = '#ff9800';
+    
+    document.getElementById('form-cancel-button').style.display = 'block';
+};
+
+window.resetMemberForm = function() {
+    const form = document.getElementById('member-form');
+    form.querySelector('h3').textContent = '새 캐릭터 등록';
+    form.reset();
+    document.getElementById('action_mode').value = 'add';
+    document.getElementById('edit_points').style.display = 'none';
+    const submitBtn = document.getElementById('form-submit-button');
+    submitBtn.textContent = '등록';
+    submitBtn.style.backgroundColor = '';
+    document.getElementById('form-cancel-button').style.display = 'none';
+    const msg = document.getElementById('form-message');
+    if(msg) { msg.textContent = ''; msg.className = ''; }
+};
 
 async function handleDeleteMember(memberId) {
     if (!confirm(`정말 [${memberId}] 캐릭터를 삭제하시겠습니까?\n이 캐릭터의 인벤토리와 포인트 로그도 모두 삭제/수정됩니다.`)) { return; }
@@ -218,7 +343,7 @@ async function handleDeleteMember(memberId) {
         const result = await response.json();
         if (result.status === 'success') {
             alert(result.message);
-            loadMembersPage();
+            await fetchAndRenderMembers();
         } else {
             alert(`삭제 실패: ${result.message}`);
         }
@@ -227,34 +352,9 @@ async function handleDeleteMember(memberId) {
     }
 }
 
-function populateEditForm(id, name, points) {
-    window.scrollTo(0, 0); 
-    const form = document.getElementById('member-form');
-    form.querySelector('h3').textContent = '캐릭터 정보 수정';
-    document.getElementById('action_mode').value = 'update';
-    document.getElementById('member_id').value = id;
-    document.getElementById('member_id').readOnly = true; 
-    document.getElementById('member_name').value = name;
-    document.getElementById('points').value = points;
-    document.getElementById('points-group').style.display = 'block';
-    document.getElementById('form-submit-button').textContent = '수정 완료';
-    document.getElementById('form-cancel-button').style.display = 'inline-block';
-}
-
-function resetMemberForm() {
-    const form = document.getElementById('member-form');
-    form.querySelector('h3').textContent = '새 캐릭터 등록';
-    document.getElementById('action_mode').value = 'add';
-    form.reset();
-    document.getElementById('member_id').readOnly = false;
-    document.getElementById('points-group').style.display = 'none';
-    document.getElementById('form-submit-button').textContent = '등록하기';
-    document.getElementById('form-cancel-button').style.display = 'none';
-    document.getElementById('form-message').textContent = '';
-    document.getElementById('form-message').className = '';
-}
-
-
+// ---------------------------------------------------------
+// 2. 아이템 관리
+// ---------------------------------------------------------
 async function loadItemsPage() {
     const pageHtml = `
 <h2>상점 관리</h2>
@@ -448,7 +548,9 @@ function resetItemForm() {
     document.getElementById('form-message').className = '';
 }
 
-
+// ---------------------------------------------------------
+// 3. 도박 관리
+// ---------------------------------------------------------
 async function loadGamesPage() {
     const pageHtml = `
         <h2>도박 관리</h2>
@@ -539,17 +641,14 @@ async function handleGameSubmit(event) {
     event.preventDefault();
     const form = event.target;
     const messageElement = document.getElementById('form-message');
-    
     const mode = document.getElementById('action_mode').value;
     const apiUrl = (mode === 'add') ? 'api_add_game.php' : 'api_update_game.php';
-
     const formData = {
         game_id: document.getElementById('game_id').value,
         game_name: form.game_name.value,
         description: form.description.value,
         outcomes: form.outcomes.value
     };
-
     try {
         const response = await fetch(`${API_BASE_URL}/${apiUrl}`, {
             method: 'POST',
@@ -578,7 +677,6 @@ function attachGameTableListeners() {
     tableBody.addEventListener('click', (event) => {
         const target = event.target;
         const gameId = target.dataset.id;
-
         if (target.classList.contains('btn-delete')) {
             const gameName = target.dataset.name;
             handleDeleteGame(gameId, gameName);
@@ -596,7 +694,6 @@ function attachGameTableListeners() {
 
 async function handleDeleteGame(gameId, gameName) {
     if (!confirm(`정말 [${gameName}] 게임을 삭제하시겠습니까?`)) { return; }
-    
     try {
         const response = await fetch(`${API_BASE_URL}/api_delete_game.php`, {
             method: 'POST',
@@ -618,15 +715,12 @@ async function handleDeleteGame(gameId, gameName) {
 function populateGameEditForm(data) {
     window.scrollTo(0, 0);
     const form = document.getElementById('game-form');
-    
     form.querySelector('h3').textContent = '도박 게임 정보 수정';
     document.getElementById('action_mode').value = 'update';
     document.getElementById('game_id').value = data.id;
-    
     document.getElementById('game_name').value = data.name;
     document.getElementById('description').value = data.desc;
     document.getElementById('outcomes').value = data.outcomes;
-    
     document.getElementById('form-submit-button').textContent = '수정 완료';
     document.getElementById('form-cancel-button').style.display = 'inline-block';
 }
@@ -637,57 +731,64 @@ function resetGameForm() {
     document.getElementById('action_mode').value = 'add';
     form.reset();
     document.getElementById('game_id').value = '';
-    
     document.getElementById('form-submit-button').textContent = '게임 등록';
     document.getElementById('form-cancel-button').style.display = 'none';
-    
     const msg = document.getElementById('form-message');
-    if(msg) {
-        msg.textContent = '';
-        msg.className = '';
-    }
+    if(msg) { msg.textContent = ''; msg.className = ''; }
 }
 
-
+// ---------------------------------------------------------
+// 4. 인벤토리 관리 (수정됨: 그룹화 및 편집 기능 추가)
+// ---------------------------------------------------------
 async function loadInventoryPage() {
     const pageHtml = `
         <h2>인벤토리 관리</h2>
-        <form id="give-item-form">
-            <h3>관리자 아이템 지급</h3>
-            <div class="form-group">
-                <label for="member_id_select">캐릭터 선택</label>
-                <select id="member_id_select" name="member_id" required>
-                    <option value="">캐릭터 로딩 중...</option>
-                </select>
+        
+        <div style="background:#fff3e0; padding:10px; border-radius:5px; margin-bottom:15px; border:1px solid #ffe0b2;">
+            <strong>💡 아이템 수정/삭제 팁</strong><br>
+            - [수정] 버튼을 누르면 수량을 변경할 수 있습니다.<br>
+            - 수량을 0으로 입력하고 저장하면 아이템이 삭제(회수)됩니다.
+        </div>
+
+        <form id="give-item-form" style="margin-bottom:20px; padding:15px; background:white; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+            <h3 style="margin-top:0;">관리자 아이템 지급 (추가)</h3>
+            <div style="display:flex; gap:10px; align-items:flex-end;">
+                <div class="form-group" style="flex:2;">
+                    <label for="member_id_select">캐릭터</label>
+                    <select id="member_id_select" name="member_id" required style="width:100%;"><option value="">로딩 중...</option></select>
+                </div>
+                <div class="form-group" style="flex:2;">
+                    <label for="item_id_select">아이템</label>
+                    <select id="item_id_select" name="item_id" required style="width:100%;"><option value="">로딩 중...</option></select>
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label for="quantity">수량</label>
+                    <input type="number" id="quantity" name="quantity" value="1" min="1" required style="width:100%; box-sizing:border-box;">
+                </div>
+                <div class="form-group">
+                    <button type="submit" style="padding:10px 15px;">지급</button>
+                </div>
             </div>
-            <div class="form-group">
-                <label for="item_id_select">아이템 선택</label>
-                <select id="item_id_select" name="item_id" required>
-                    <option value="">아이템 로딩 중...</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="quantity">수량</label>
-                <input type="number" id="quantity" name="quantity" value="1" min="1" required>
-            </div>
-            <button type="submit">아이템 지급</button>
             <p id="form-message"></p>
         </form>
+
         <h3>전체 인벤토리 목록</h3>
-        <table id="inventory-table">
+        <table id="inventory-table" style="width:100%; border-collapse: collapse;">
             <thead>
                 <tr>
-                    <th>캐릭터 이름</th>
-                    <th>아이템 이름</th>
-                    <th>보유 수량</th>
-                    <th>관리</th>
+                    <th style="width:30%;">캐릭터 이름</th>
+                    <th style="width:30%;">아이템 이름</th>
+                    <th style="width:20%;">보유 수량</th>
+                    <th style="width:20%;">관리</th>
                 </tr>
             </thead>
             <tbody><tr><td colspan="4">데이터 로딩 중...</td></tr></tbody>
         </table>
     `;
     contentElement.innerHTML = pageHtml;
+
     document.getElementById('give-item-form').addEventListener('submit', handleGiveItem);
+
     try {
         const [membersRes, itemsRes, inventoryRes] = await Promise.all([
             fetch(`${API_BASE_URL}/api_get_all_members.php`),
@@ -698,39 +799,120 @@ async function loadInventoryPage() {
         const itemsResult = await itemsRes.json();
         const inventoryResult = await inventoryRes.json();
 
-        const memberSelect = document.getElementById('member_id_select');
-        populateSelect(memberSelect, membersResult.data, 'member_id', 'member_name');
-
-        const itemSelect = document.getElementById('item_id_select');
-        populateSelect(itemSelect, itemsResult.data, 'item_id', 'item_name');
+        populateSelect(document.getElementById('member_id_select'), membersResult.data, 'member_id', 'member_name');
+        populateSelect(document.getElementById('item_id_select'), itemsResult.data, 'item_id', 'item_name');
 
         const tableBody = document.querySelector('#inventory-table tbody');
+        
         if (inventoryResult.status === 'success' && inventoryResult.data.length > 0) {
-            const rowsHtml = inventoryResult.data.map(inv => `
-                <tr>
-                    <td>${inv.member_name} (${inv.member_id})</td>
-                    <td>${inv.item_name} (ID: ${inv.item_id})</td>
-                    <td>${inv.quantity.toLocaleString()} 개</td>
-                    <td>
-                        <button class="btn-action btn-delete" 
-                                data-member-id="${inv.member_id}" 
-                                data-item-id="${inv.item_id}">
-                            삭제
-                        </button>
-                    </td>
-                </tr>
-            `).join('');
+            // 데이터 그룹화: member_id 기준
+            const groupedData = {};
+            inventoryResult.data.forEach(item => {
+                if (!groupedData[item.member_id]) {
+                    groupedData[item.member_id] = {
+                        name: item.member_name,
+                        id: item.member_id,
+                        items: []
+                    };
+                }
+                groupedData[item.member_id].items.push(item);
+            });
+
+            // 렌더링
+            let rowsHtml = '';
+            for (const mid in groupedData) {
+                const member = groupedData[mid];
+                const rowCount = member.items.length;
+
+                member.items.forEach((item, index) => {
+                    rowsHtml += `<tr>`;
+                    // 첫 번째 아이템일 때만 캐릭터 이름 셀 생성 (Rowspan 적용)
+                    if (index === 0) {
+                        rowsHtml += `<td rowspan="${rowCount}" style="background-color:#f9f9f9; font-weight:bold; border-right:2px solid #ddd; vertical-align:middle;">
+                                        ${member.name}<br><span style="font-size:0.8em; color:#888;">(${member.id})</span>
+                                     </td>`;
+                    }
+                    rowsHtml += `
+                        <td>${item.item_name}</td>
+                        <td id="qty-${item.member_id}-${item.item_id}">
+                            <span class="qty-text">${item.quantity.toLocaleString()} 개</span>
+                            <input type="number" class="qty-input" value="${item.quantity}" style="display:none; width:60px;">
+                        </td>
+                        <td>
+                            <button class="btn-action btn-edit" onclick="toggleEditInventory('${item.member_id}', '${item.item_id}')">수정</button>
+                            <button class="btn-action btn-save" onclick="saveInventory('${item.member_id}', '${item.item_id}')" style="display:none; background-color:#28a745; color:white;">저장</button>
+                            <button class="btn-action btn-delete" onclick="handleDeleteInventory('${item.member_id}', '${item.item_id}')">삭제</button>
+                        </td>
+                    </tr>`;
+                });
+            }
             tableBody.innerHTML = rowsHtml;
-            attachInventoryTableListeners();
+
         } else if (inventoryResult.status === 'success') {
             tableBody.innerHTML = '<tr><td colspan="4">인벤토리에 아이템이 없습니다.</td></tr>';
         } else {
             tableBody.innerHTML = `<tr><td colspan="4" class="error">${inventoryResult.message}</td></tr>`;
         }
     } catch (error) {
-        contentElement.innerHTML += `<p class="error">페이지 로드 중 심각한 오류 발생: ${error}</p>`;
+        contentElement.innerHTML += `<p class="error">로드 오류: ${error}</p>`;
     }
 }
+
+// 인벤토리 수정 모드 토글
+window.toggleEditInventory = function(memId, itemId) {
+    const qtyCell = document.getElementById(`qty-${memId}-${itemId}`);
+    const row = qtyCell.parentElement;
+    
+    const textSpan = qtyCell.querySelector('.qty-text');
+    const input = qtyCell.querySelector('.qty-input');
+    const btnEdit = row.querySelector('.btn-edit');
+    const btnSave = row.querySelector('.btn-save');
+    const btnDelete = row.querySelector('.btn-delete');
+
+    if (input.style.display === 'none') {
+        // 수정 모드 진입
+        textSpan.style.display = 'none';
+        input.style.display = 'inline-block';
+        btnEdit.textContent = '취소';
+        btnEdit.style.backgroundColor = '#6c757d'; // 회색
+        btnSave.style.display = 'inline-block';
+        btnDelete.style.display = 'none';
+    } else {
+        // 취소
+        textSpan.style.display = 'inline-block';
+        input.style.display = 'none';
+        input.value = textSpan.textContent.replace(/[^0-9]/g, ''); // 원래 값 복구
+        btnEdit.textContent = '수정';
+        btnEdit.style.backgroundColor = ''; // 원래 색
+        btnSave.style.display = 'none';
+        btnDelete.style.display = 'inline-block';
+    }
+};
+
+// 인벤토리 수량 저장
+window.saveInventory = async function(memId, itemId) {
+    const qtyCell = document.getElementById(`qty-${memId}-${itemId}`);
+    const input = qtyCell.querySelector('.qty-input');
+    const newQty = parseInt(input.value);
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api_update_inventory.php`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ member_id: memId, item_id: parseInt(itemId), quantity: newQty })
+        });
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            alert(result.message);
+            loadInventoryPage(); // 새로고침
+        } else {
+            alert("수정 실패: " + result.message);
+        }
+    } catch (error) {
+        alert("오류 발생: " + error);
+    }
+};
 
 async function handleGiveItem(event) {
     event.preventDefault();
@@ -763,35 +945,29 @@ async function handleGiveItem(event) {
     }
 }
 
-function attachInventoryTableListeners() {
-    const tableBody = document.querySelector('#inventory-table tbody');
-    tableBody.addEventListener('click', async (event) => {
-        const target = event.target;
-        if (target.classList.contains('btn-delete')) {
-            const memberId = target.dataset.memberId;
-            const itemId = target.dataset.itemId;
-            if (!confirm(`[${memberId}] 캐릭터의 [아이템 ID: ${itemId}]을(를)\n인벤토리에서 전부 삭제하시겠습니까?`)) { return; }
-            try {
-                const response = await fetch(`${API_BASE_URL}/api_admin_delete_inventory_item.php`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ member_id: memberId, item_id: itemId })
-                });
-                const result = await response.json();
-                if (result.status === 'success') {
-                    alert(result.message);
-                    loadInventoryPage();
-                } else {
-                    alert(`삭제 실패: ${result.message}`);
-                }
-            } catch (error) {
-                alert(`삭제 중 오류 발생: ${error}`);
-            }
+window.handleDeleteInventory = async function(memberId, itemId) {
+    if (!confirm(`정말 삭제하시겠습니까?`)) { return; }
+    try {
+        const response = await fetch(`${API_BASE_URL}/api_admin_delete_inventory_item.php`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ member_id: memberId, item_id: itemId })
+        });
+        const result = await response.json();
+        if (result.status === 'success') {
+            alert(result.message);
+            loadInventoryPage();
+        } else {
+            alert(`삭제 실패: ${result.message}`);
         }
-    });
-}
+    } catch (error) {
+        alert(`오류 발생: ${error}`);
+    }
+};
 
-
+// ---------------------------------------------------------
+// 5. 포인트/아이템 양도
+// ---------------------------------------------------------
 async function loadTransferPointPage() {
     const pageHtml = `
         <h2>포인트 양도</h2>
@@ -987,7 +1163,9 @@ async function handleTransferItem(event) {
     }
 }
 
-
+// ---------------------------------------------------------
+// 6. 로그
+// ---------------------------------------------------------
 async function loadLogsPage() {
     const pageHtml = `
         <h2>포인트 로그</h2>
@@ -1099,7 +1277,9 @@ async function loadItemLogsPage() {
     }
 }
 
-
+// ---------------------------------------------------------
+// 7. 설정 (초기화)
+// ---------------------------------------------------------
 async function loadSettingsPage() {
     const pageHtml = `
         <h2>설정</h2>
@@ -1226,6 +1406,9 @@ function sortTable(tableId, colIndex, type) {
     tbody.append(...rows);
 }
 
+// ---------------------------------------------------------
+// 8. 상태 관리
+// ---------------------------------------------------------
 async function loadStatusPage() {
     const pageHtml = `
         <h2>상태 이상 관리</h2>

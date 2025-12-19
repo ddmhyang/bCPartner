@@ -10,9 +10,10 @@ header("Content-Type: application/json; charset=utf-8");
 $response = ['status' => 'success', 'data' => []];
 
 try {
+    // ✨ [수정됨] datetime(T1.log_time, '+9 hours') as log_time
     $sql = "SELECT 
                 T1.log_id,
-                T1.log_time,
+                datetime(T1.log_time, '+9 hours') as log_time,
                 T1.quantity_change,
                 T1.reason,
                 T2.member_name,
