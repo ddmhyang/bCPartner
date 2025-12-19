@@ -1,7 +1,5 @@
 <?php
-// ✨ [필수] 한국 시간 설정 (이 줄이 꼭 있어야 합니다!)
 date_default_timezone_set('Asia/Seoul');
-
 $db_file = __DIR__ . '/database.db';
 
 if (!file_exists($db_file)) {
@@ -9,35 +7,23 @@ if (!file_exists($db_file)) {
     exit;
 }
 
-$dsn = "sqlite:" . $db_file;
-$options = [
-    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-    PDO::ATTR_EMULATE_PREPARES   => false,
-];
-
 try {
-     $pdo = new PDO($dsn, null, null, $options);
-     $pdo->exec('PRAGMA journal_mode = wal;');
-     $pdo->exec('PRAGMA foreign_keys = ON;');
-     
-     $commands = [
-        "CREATE TABLE IF NOT EXISTS `youth_status_types` ( `type_id` INTEGER PRIMARY KEY AUTOINCREMENT, `status_name` VARCHAR(100) NOT NULL, `default_duration` INT DEFAULT -1, `max_stage` INT DEFAULT 1, `can_evolve` INT DEFAULT 0, `evolve_interval` INT DEFAULT 0 );",
-        "CREATE TABLE IF NOT EXISTS `youth_active_statuses` ( `id` INTEGER PRIMARY KEY AUTOINCREMENT, `member_id` VARCHAR(100) NOT NULL, `type_id` INTEGER NOT NULL, `current_stage` INT DEFAULT 1, `applied_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP, `expires_at` TIMESTAMP NULL, FOREIGN KEY (`member_id`) REFERENCES `youth_members`(`member_id`) ON DELETE CASCADE, FOREIGN KEY (`type_id`) REFERENCES `youth_status_types`(`type_id`) ON DELETE CASCADE );",
-        "CREATE TABLE IF NOT EXISTS `youth_status_logs` ( `log_id` INTEGER PRIMARY KEY AUTOINCREMENT, `member_id` VARCHAR(100), `status_name` VARCHAR(100), `action_detail` VARCHAR(255), `log_time` TIMESTAMP DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (`member_id`) REFERENCES `youth_members`(`member_id`) ON DELETE SET NULL );"
-     ];
-     foreach ($commands as $cmd) { $pdo->exec($cmd); }
+    $pdo = new PDO("sqlite:" . $db_file, null, null, [
+        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_EMULATE_PREPARES   => false,
+    ]);
+    $pdo->exec('PRAGMA journal_mode = wal;');
+    $pdo->exec('PRAGMA foreign_keys = ON;');
 
-     try {
-        $pdo->exec("ALTER TABLE youth_status_types ADD COLUMN evolve_interval INT DEFAULT 0;");
-     } catch (Exception $e) {}
-
-     try {
-        $pdo->exec("ALTER TABLE youth_status_types ADD COLUMN can_evolve INT DEFAULT 0;");
-     } catch (Exception $e) {}
-
-} catch (\PDOException $e) {
-     echo "DB 연결 오류: " . $e->getMessage();
-     exit;
-}
+    $queries = [
+        "CREATE TABLE IF NOT EXISTS `youth_members` ( `member_id` INTEGER PRIMARY KEY AUTOINCREMENT, `member_name` VARCHAR(100) NOT NULL, `points` INT NOT NULL DEFAULT 0 );",
+        "CREATE TABLE IF NOT EXISTS `youth_items` ( `item_id` INTEGER PRIMARY KEY AUTOINCREMENT, `item_name` VARCHAR(255) NOT NULL, `item_description` TEXT, `price` INT NOT NULL DEFAULT 0, `stock` INT NOT NULL DEFAULT -1, `status` VARCHAR(50) DEFAULT 'selling' );",
+        "CREATE TABLE IF NOT EXISTS `youth_inventory` ( `member_id` INT, `item_id` INT, `quantity` INT DEFAULT 1, PRIMARY KEY(`member_id`, `item_id`), FOREIGN KEY(`member_id`) REFERENCES `youth_members`(`member_id`) ON DELETE CASCADE, FOREIGN KEY(`item_id`) REFERENCES `youth_items`(`item_id`) ON DELETE CASCADE );",
+        "CREATE TABLE IF NOT EXISTS `youth_status_types` ( `type_id` INTEGER PRIMARY KEY AUTOINCREMENT, `status_name` VARCHAR(100) NOT NULL, `max_stage` INT DEFAULT 1, `stage_intervals` TEXT, `default_duration` INT DEFAULT -1 );",
+        "CREATE TABLE IF NOT EXISTS `youth_active_statuses` ( `id` INTEGER PRIMARY KEY AUTOINCREMENT, `member_id` INT, `type_id` INT, `current_stage` INT DEFAULT 1, `applied_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP, `next_evolve_at` TIMESTAMP NULL, FOREIGN KEY(`member_id`) REFERENCES `youth_members`(`member_id`) ON DELETE CASCADE, FOREIGN KEY(`type_id`) REFERENCES `youth_status_types`(`type_id`) ON DELETE CASCADE );",
+        "CREATE TABLE IF NOT EXISTS `youth_logs` ( `log_id` INTEGER PRIMARY KEY AUTOINCREMENT, `member_id` INT, `log_type` VARCHAR(50), `target_name` VARCHAR(100), `change_val` TEXT, `reason` TEXT, `log_time` TIMESTAMP DEFAULT CURRENT_TIMESTAMP );"
+    ];
+    foreach ($queries as $sql) { $pdo->exec($sql); }
+} catch (PDOException $e) { die("DB 오류: " . $e->getMessage()); }
 ?>

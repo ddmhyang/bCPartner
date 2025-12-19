@@ -1,39 +1,44 @@
-<?php
-include 'auth_check.php'; 
-include 'db_connect.php'; 
-?>
+<?php include 'auth_check.php'; include 'db_connect.php'; ?>
 <!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>밴드 상점 관리자 (SPA)</title>
+    <title>밴드 관리 시스템 v2</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
-<nav id="main-nav">
-        <h1>관리자 메뉴</h1>
-        <ul>
-            <li><a href="#" data-page="members">회원 관리</a></li>
-            <li><a href="#" data-page="items">상점 관리</a></li>
-            <li><a href="#" data-page="games">도박 관리</a></li>
-            <li><a href="#" data-page="inventory">인벤토리 관리</a></li>
-            <li><a href="#" data-page="status">상태 이상 관리</a></li>
-            <li><a href="#" data-page="transfer_point">포인트 양도</a></li>
-            <li><a href="#" data-page="transfer_item">아이템 양도</a></li>
-            <li><a href="#" data-page="logs">포인트 로그</a></li>
-            <li><a href="#" data-page="item_logs">아이템 로그</a></li>
-            <li><a href="#" data-page="status_logs">상태 로그</a></li>
-            <li><a href="#" data-page="settings">설정</a></li> <li><a href="logout.php">로그아웃</a></li>
+    <nav id="main-nav">
+        <div class="nav-logo">관리자 패널</div>
+        <ul class="menu-list">
+            <li><a href="#/members">캐릭터</a></li>
+            <li class="has-sub">
+                <a href="#/manage">관리</a>
+                <ul class="sub-menu">
+                    <li><a href="#/manage/shop">상점</a></li>
+                    <li><a href="#/manage/gamble">도박</a></li>
+                    <li><a href="#/manage/status">상태이상</a></li>
+                </ul>
+            </li>
+            <li class="has-sub">
+                <a href="#/transfer">양도</a>
+                <ul class="sub-menu">
+                    <li><a href="#/transfer/point">포인트</a></li>
+                    <li><a href="#/transfer/item">아이템</a></li>
+                </ul>
+            </li>
+            <li><a href="#/logs">로그</a></li>
+            <li><a href="#/settings">설정</a></li>
         </ul>
     </nav>
 
-    <main id="app-content">
-        <h2>환영합니다!</h2>
-        <p>왼쪽 메뉴를 클릭하여 관리를 시작하세요.</p>
+    <main id="app-container">
+        <header id="top-bar">
+            <input type="text" id="global-search" placeholder="검색어 입력 (캐릭터, 물건, 사유)...">
+            <input type="date" id="date-filter">
+        </header>
+        <div id="app-content"></div>
     </main>
-
     <script src="app.js"></script>
 </body>
 </html>
