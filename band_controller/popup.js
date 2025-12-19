@@ -1,4 +1,4 @@
-const API_BASE_URL = 'https://주소.dothome.co.kr/';
+const API_BASE_URL = 'https://주소.dothome.co.kr/'
 
 const resultBox = document.getElementById('result-box');
 const errorMessage = document.getElementById('error-message');
@@ -13,10 +13,17 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('item-form').addEventListener('submit', handleItemForm);
     document.getElementById('info-form').addEventListener('submit', handleInfoForm);
 
-    document.getElementById('btn-status-add').addEventListener('click', () => handleStatusAction('add'));
-    document.getElementById('btn-status-decrease').addEventListener('click', () => handleStatusAction('decrease'));
-    document.getElementById('btn-status-evolve').addEventListener('click', () => handleStatusAction('evolve'));
-    document.getElementById('btn-status-cure').addEventListener('click', () => handleStatusAction('cure'));
+    const btnAdd = document.getElementById('btn-status-add');
+    if(btnAdd) btnAdd.addEventListener('click', () => handleStatusAction('add'));
+    
+    const btnDecrease = document.getElementById('btn-status-decrease');
+    if(btnDecrease) btnDecrease.addEventListener('click', () => handleStatusAction('decrease'));
+    
+    const btnEvolve = document.getElementById('btn-status-evolve');
+    if(btnEvolve) btnEvolve.addEventListener('click', () => handleStatusAction('evolve'));
+    
+    const btnCure = document.getElementById('btn-status-cure');
+    if(btnCure) btnCure.addEventListener('click', () => handleStatusAction('cure'));
 
     preloadAllDropdownData();
     
@@ -112,6 +119,20 @@ function populateSelect(selectElement, data, valueField, textField, optionalFiel
     selectElement.disabled = false;
 }
 
+// 포인트 확인 메시지를 출력하는 공통 함수
+async function showUserPointsMessage(memberId) {
+    try {
+        const response = await fetch(`${API_BASE_URL}get_user_info.php?member_id=${memberId}`);
+        const result = await response.json();
+        if (result.status === 'success') {
+            const p = result.data.points.toLocaleString();
+            showResult(`확인했습니다! 현재 포인트는 ${p}p입니다!`);
+        }
+    } catch (e) {
+        console.error(e);
+    }
+}
+
 async function handleStatusAction(actionType) {
     const memberId = document.getElementById('member-id-status').value;
     const typeSelect = document.getElementById('status-type-select');
@@ -137,27 +158,33 @@ async function handleStatusAction(actionType) {
     }
 }
 
-
 async function handlePointForm(event) {
     event.preventDefault();
     const form = event.target;
+    const memberId = form.member_id.value;
     const result = await callApi('admin_give_point.php', {
-        member_id: form.member_id.value,
+        member_id: memberId,
         points: parseInt(form.points.value),
         reason: form.reason.value
     });
-    if (result) { showResult(result.message); form.reset(); }
+    if (result) { 
+        await showUserPointsMessage(memberId);
+        form.reset(); 
+    }
 }
 
 async function handleTransferPointForm(event) {
     event.preventDefault();
     const form = event.target;
+    const senderId = form.sender_id.value;
     const result = await callApi('api_transfer_points.php', {
-        sender_id: form.sender_id.value,
+        sender_id: senderId,
         receiver_id: form.receiver_id.value,
         amount: parseInt(form.amount.value)
     });
-    if (result) showResult(result.message);
+    if (result) {
+        await showUserPointsMessage(senderId);
+    }
 }
 
 async function handleTransferItemForm(event) {
@@ -178,55 +205,66 @@ async function handleTransferItemForm(event) {
     }
 }
 
+// [수정됨] 도박: 결과 배율을 포함하여 메시지 출력
 async function handleGambleForm(event) {
     event.preventDefault();
     const form = event.target;
+    const memberId = form.member_id.value;
+    
     const result = await callApi('run_gamble.php', {
-        member_id: form.member_id.value,
+        member_id: memberId,
         game_id: parseInt(form.game_id.value),
         bet_amount: parseInt(form.bet_amount.value)
     });
-    if (result) showResult(result.message);
+    
+    if (result) {
+        try {
+            // 포인트 갱신 조회
+            const response = await fetch(`${API_BASE_URL}get_user_info.php?member_id=${memberId}`);
+            const infoResult = await response.json();
+            
+            if (infoResult.status === 'success') {
+                const p = infoResult.data.points.toLocaleString();
+                // 도박 API가 돌려준 배율(multiplier) 사용
+                const multiplier = result.multiplier; 
+                
+                showResult(`확인했습니다! (${multiplier}배) 현재 포인트는 ${p}p입니다!`);
+            }
+        } catch (e) {
+            console.error(e);
+            // 에러 시 기본 메시지라도 출력
+            showResult(result.message);
+        }
+    }
 }
 
 async function handleItemForm(event) {
     event.preventDefault();
     const form = event.target;
+    const memberId = form.member_id.value;
     const isPurchase = document.getElementById('item-is-purchase').checked;
     const endpoint = isPurchase ? 'buy_item.php' : 'api_admin_give_item.php';
     const result = await callApi(endpoint, {
-        member_id: form.member_id.value,
+        member_id: memberId,
         item_id: parseInt(form.item_id.value),
         quantity: parseInt(form.quantity.value)
     });
-    if (result) { showResult(result.message); form.reset(); document.getElementById('item-is-purchase').checked = false; }
+    if (result) { 
+        if (isPurchase) {
+            await showUserPointsMessage(memberId);
+        } else {
+            showResult(result.message);
+        }
+        form.reset(); 
+        document.getElementById('item-is-purchase').checked = false; 
+    }
 }
 
 async function handleInfoForm(event) {
     event.preventDefault();
     clearMessages();
     const memberId = event.target.member_id.value;
-    try {
-        const response = await fetch(`${API_BASE_URL}get_user_info.php?member_id=${memberId}`);
-        const result = await response.json();
-        if (result.status === 'success') {
-            const info = result.data;
-            let message = `💬 [${info.member_name} (${info.member_id})] 정보\n`;
-            message += `💰 포인트: ${info.points.toLocaleString()} P\n`;
-            
-            if (info.inventory && info.inventory.length > 0) {
-                message += `🎒 인벤토리:\n`;
-                info.inventory.forEach(item => {
-                    message += `- ${item.item_name} x ${item.quantity}\n`;
-                });
-            } else {
-                message += `🎒 인벤토리: (비어있음)\n`;
-            }
-            showResult(message);
-        } else {
-            throw new Error(result.message);
-        }
-    } catch (error) { showError(error.message); }
+    await showUserPointsMessage(memberId);
 }
 
 async function callApi(endpoint, body) {
